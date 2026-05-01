@@ -430,11 +430,11 @@ func (c *Compiler) generateAgentRunSteps(yaml *strings.Builder, data *WorkflowDa
 
 	logFileFull := "/tmp/gh-aw/agent-stdio.log"
 
-	// Clean git credentials before executing the agentic engine
-	// This ensures that any credentials left on disk by custom steps are removed
-	// to prevent the agent from accessing or exfiltrating them
-	gitCleanerSteps := c.generateGitCredentialsCleanerStep()
-	for _, line := range gitCleanerSteps {
+	// Clean credentials before executing the agentic engine.
+	// This removes git credentials from .git/config and, when known credential-leaking
+	// actions were detected, also removes cloud-provider / registry credentials.
+	credentialsCleanerSteps := c.generateCredentialsCleanerStep(data.KnownActionCredentialEnvVars)
+	for _, line := range credentialsCleanerSteps {
 		yaml.WriteString(line)
 	}
 
