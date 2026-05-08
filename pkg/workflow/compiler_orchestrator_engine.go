@@ -270,6 +270,16 @@ func (c *Compiler) setupEngineAndImports(result *parser.FrontmatterResult, clean
 		}
 	}
 
+	// Normalize: if the main workflow declared a preference-only engine object (e.g.
+	// engine: {model: small}) then engineConfig is non-nil but has an empty ID.
+	// Set the ID from the resolved engineSetting so that downstream code which reads
+	// engineConfig.ID (e.g. metadata env vars, threat-detection engine selection) gets
+	// the correct engine identifier rather than an empty string.
+	if engineConfig != nil && engineConfig.ID == "" && engineSetting != "" {
+		engineConfig.ID = engineSetting
+		orchestratorEngineLog.Printf("Normalized engineConfig.ID from engineSetting: %s", engineSetting)
+	}
+
 	// Merge engine.mcp.* settings from imports (consumer-specified values take precedence).
 	// Shared workflows can declare engine.mcp.tool-timeout / engine.mcp.session-timeout to
 	// propagate MCP gateway timeout configuration to consumers without requiring consumers
@@ -288,6 +298,12 @@ func (c *Compiler) setupEngineAndImports(result *parser.FrontmatterResult, clean
 	if engineConfig.MCPSessionTimeout == "" && importsResult.MergedEngineMCPSessionTimeout != "" {
 		engineConfig.MCPSessionTimeout = importsResult.MergedEngineMCPSessionTimeout
 		orchestratorEngineLog.Printf("Applied engine.mcp.session-timeout from import: %s", engineConfig.MCPSessionTimeout)
+	}
+	// Apply model preference from imports that declare engine.model without engine.id.
+	// The consuming workflow's own model setting takes precedence (first-wins).
+	if engineConfig.Model == "" && importsResult.MergedEngineModel != "" {
+		engineConfig.Model = importsResult.MergedEngineModel
+		orchestratorEngineLog.Printf("Applied engine.model preference from import: %s", engineConfig.Model)
 	}
 
 	// Validate the engine setting and resolve the runtime adapter via the catalog.

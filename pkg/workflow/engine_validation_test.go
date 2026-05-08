@@ -87,9 +87,52 @@ func TestValidateSingleEngineSpecification(t *testing.T) {
 			errorMsg:            "failed to parse",
 		},
 		{
-			name:                "included engine with invalid object format (no id)",
+			// Model preference (no id) is valid — returns "" so the compiler uses the default
+			// engine. The model value flows through separately; see TestCompileWorkflowWithModelOnlyEngine.
+			name:                "included engine with model-only (no id) is a preference, not a spec",
 			mainEngineSetting:   "",
 			includedEnginesJSON: []string{`{"model": "gpt-4"}`},
+			expectedEngine:      "",
+			expectError:         false,
+		},
+		{
+			name:                "included engine with model size hint 'small' is allowed without id",
+			mainEngineSetting:   "",
+			includedEnginesJSON: []string{`{"model": "small"}`},
+			expectedEngine:      "",
+			expectError:         false,
+		},
+		{
+			name:                "model-only included engine does not conflict with main engine",
+			mainEngineSetting:   "copilot",
+			includedEnginesJSON: []string{`{"model": "small"}`},
+			expectedEngine:      "copilot",
+			expectError:         false,
+		},
+		{
+			name:                "model-only included engine does not conflict with real included engine",
+			mainEngineSetting:   "",
+			includedEnginesJSON: []string{`{"id": "copilot"}`, `{"model": "small"}`},
+			expectedEngine:      "copilot",
+			expectError:         false,
+		},
+		{
+			// An empty object {} has no id/runtime but also no known preference keys;
+			// it must NOT be silently skipped — it should be treated as an engine spec
+			// and trigger a validation error (missing id field).
+			name:                "empty object is not a preference-only engine and triggers error",
+			mainEngineSetting:   "",
+			includedEnginesJSON: []string{`{}`},
+			expectedEngine:      "",
+			expectError:         true,
+			errorMsg:            "invalid engine configuration",
+		},
+		{
+			// An object with an unknown key has no id/runtime but must NOT be silently
+			// skipped — it should pass through to normal validation.
+			name:                "object with unknown key is not a preference-only engine and triggers error",
+			mainEngineSetting:   "",
+			includedEnginesJSON: []string{`{"foo": 1}`},
 			expectedEngine:      "",
 			expectError:         true,
 			errorMsg:            "invalid engine configuration",
@@ -187,10 +230,10 @@ func TestValidateSingleEngineSpecificationErrorMessageQuality(t *testing.T) {
 	})
 
 	t.Run("invalid configuration error includes format examples", func(t *testing.T) {
-		_, err := compiler.validateSingleEngineSpecification("", []string{`{"model": "gpt-4"}`})
+		_, err := compiler.validateSingleEngineSpecification("", []string{`{"id": 123}`})
 
 		if err == nil {
-			t.Fatal("Expected validation to fail for configuration without id")
+			t.Fatal("Expected validation to fail for configuration with non-string id")
 		}
 
 		errorMsg := err.Error()
