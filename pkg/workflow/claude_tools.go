@@ -12,6 +12,8 @@ import (
 
 var claudeToolsLog = logger.New("workflow:claude_tools")
 
+const defaultClaudeTmpWritePath = "/tmp"
+
 // hasBashWildcardInTools returns true when the neutral tools map grants unrestricted
 // bash access — either because bash is not a list (e.g. bash: true) or because the
 // list contains a "*" or ":*" wildcard entry.
@@ -162,7 +164,7 @@ func (e *ClaudeEngine) expandNeutralToolsToClaudeTools(tools map[string]any) map
 // user-visible tools map but must be explicitly added to --allowed-tools when
 // --permission-mode acceptEdits is in use, because acceptEdits actually enforces the
 // allowlist (unlike bypassPermissions which silently ignores it).
-func (e *ClaudeEngine) computeAllowedClaudeToolsString(tools map[string]any, safeOutputs *SafeOutputsConfig, cacheMemoryConfig *CacheMemoryConfig, mcpScripts *MCPScriptsConfig) string {
+func (e *ClaudeEngine) computeAllowedClaudeToolsString(tools map[string]any, safeOutputs *SafeOutputsConfig, cacheMemoryConfig *CacheMemoryConfig, mcpScripts *MCPScriptsConfig, sandboxConfig *SandboxConfig) string {
 	claudeToolsLog.Print("Computing allowed Claude tools string")
 
 	// Initialize tools map if nil
@@ -432,6 +434,46 @@ func (e *ClaudeEngine) computeAllowedClaudeToolsString(tools map[string]any, saf
 						// intend to use its tools. Server-side restrictions still apply.
 						allowedTools = append(allowedTools, "mcp__"+toolName)
 					}
+				}
+			}
+		}
+	}
+
+	// Grant path-scoped file tool access for sandbox writable paths.
+	// Claude workflows should always be able to use /tmp even when not explicitly
+	// listed in sandbox.agent.config.filesystem.allowWrite.
+	if sandboxConfig != nil {
+		writablePaths := []string{defaultClaudeTmpWritePath}
+		if sandboxConfig.Agent != nil && sandboxConfig.Agent.Config != nil && sandboxConfig.Agent.Config.Filesystem != nil {
+			writablePaths = append(writablePaths, sandboxConfig.Agent.Config.Filesystem.AllowWrite...)
+		}
+		seenPatterns := make(map[string]struct{}, len(writablePaths))
+		for _, writablePath := range writablePaths {
+			path := strings.TrimSpace(writablePath)
+			if path == "" {
+				continue
+			}
+			// Claude path-scoped tool permissions must be absolute.
+			if !strings.HasPrefix(path, "/") {
+				continue
+			}
+			pattern := path
+			// Treat plain directory paths as "directory contents" grants to mirror cache-memory behavior.
+			if !strings.ContainsAny(pattern, "*?[]{}") {
+				pattern = strings.TrimRight(pattern, "/") + "/*"
+			}
+			if _, seen := seenPatterns[pattern]; seen {
+				continue
+			}
+			seenPatterns[pattern] = struct{}{}
+			for _, toolPattern := range []string{
+				fmt.Sprintf("Read(%s)", pattern),
+				fmt.Sprintf("Write(%s)", pattern),
+				fmt.Sprintf("Edit(%s)", pattern),
+				fmt.Sprintf("MultiEdit(%s)", pattern),
+			} {
+				if !slices.Contains(allowedTools, toolPattern) {
+					allowedTools = append(allowedTools, toolPattern)
 				}
 			}
 		}
