@@ -1052,6 +1052,8 @@ describe("create_pull_request - max limit enforcement", () => {
     expect(parseDiffGitHeader("diff --git a/foo.txt b/foo.txt")).toBe("foo.txt");
     // Path with spaces (git always emits quoted form when path contains spaces)
     expect(parseDiffGitHeader('diff --git "a/dir/with space/x" "b/dir/with space/x"')).toBe("dir/with space/x");
+    // CRLF line ending should not leak trailing carriage-return into path
+    expect(parseDiffGitHeader("diff --git a/crlf.txt b/crlf.txt\r")).toBe("crlf.txt");
 
     // A patch with three different quoted/escaped files should count as 3.
     const patch = [
@@ -1089,7 +1091,7 @@ describe("create_pull_request - max limit enforcement", () => {
     expect(countUniquePatchFiles(patchContent)).toBe(3);
 
     // Mixed: 2 parseable + 2 unparseable = 4 unique entries.
-    const mixed = ["diff --git a/a.txt b/a.txt", "diff --git ", "diff --git b/b.txt c/b.txt", "diff --git "].join("\n");
+    const mixed = ["diff --git a/a.txt b/a.txt", 'diff --git "a/missing b/missing', "diff --git b/b.txt c/b.txt", "diff --git "].join("\n");
     expect(countUniquePatchFiles(mixed)).toBe(4);
 
     // 200 unparseable headers must still trigger the default 100-file limit.
