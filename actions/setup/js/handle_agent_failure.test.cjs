@@ -2007,8 +2007,29 @@ describe("handle_agent_failure", () => {
 
   describe("buildEffectiveTokensRateLimitErrorContext", () => {
     let buildEffectiveTokensRateLimitErrorContext;
+    const fs = require("fs");
+    const os = require("os");
+    const path = require("path");
+    let tmpDir;
 
     beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gh-aw-test-et-error-context-"));
+      const promptsDir = path.join(tmpDir, "gh-aw", "prompts");
+      fs.mkdirSync(promptsDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(promptsDir, "effective_tokens_rate_limit_error.md"),
+        "**⛔ Effective Token Budget Exhausted**: The run failed due to effective-token budget/rate-limit enforcement in the API proxy.\n\n" +
+          "<details>\n" +
+          "<summary>Why this happened and how to optimize</summary>\n\n" +
+          "- Learn about [effective tokens]({et_spec_link}).\n" +
+          "{usage_line}{budget_line}{run_line}\n" +
+          "You can tune this limit with `max-effective-tokens` in workflow frontmatter.\n\n" +
+          "{et_table_section}\n" +
+          "- To optimize this workflow, follow the [token optimization instructions]({token_opt_link}).\n" +
+          "</details>\n"
+      );
+      process.env.RUNNER_TEMP = tmpDir;
+
       global.core = { info: vi.fn(), warning: vi.fn(), error: vi.fn(), debug: vi.fn(), setOutput: vi.fn(), setFailed: vi.fn() };
       global.github = {};
       global.context = { repo: { owner: "owner", repo: "repo" } };
@@ -2020,6 +2041,10 @@ describe("handle_agent_failure", () => {
       delete global.core;
       delete global.github;
       delete global.context;
+      delete process.env.RUNNER_TEMP;
+      if (tmpDir && fs.existsSync(tmpDir)) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
     });
 
     it("formats effective token values in friendly compact form", () => {
@@ -2054,6 +2079,17 @@ describe("handle_agent_failure", () => {
     it("includes a link to the token optimization guide", () => {
       const result = buildEffectiveTokensRateLimitErrorContext(true, "10000000", "25000000", "https://example.com/run/1");
       expect(result).toContain("https://github.com/github/gh-aw/blob/main/.github/aw/token-optimization.md");
+    });
+
+    it("formats the run URL as a markdown link", () => {
+      const result = buildEffectiveTokensRateLimitErrorContext(true, "10000000", "25000000", "https://example.com/run/1");
+      expect(result).toContain("- Run: [https://example.com/run/1](https://example.com/run/1)");
+    });
+
+    it("wraps ET guidance in a collapsible details section", () => {
+      const result = buildEffectiveTokensRateLimitErrorContext(true, "10000000", "25000000", "https://example.com/run/1");
+      expect(result).toContain("<summary>Why this happened and how to optimize</summary>");
+      expect(result).toContain("token optimization instructions");
     });
 
     it("includes a collapsible details section for ET computation", () => {
