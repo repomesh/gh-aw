@@ -1603,7 +1603,7 @@ safe-outputs:
 ---
 ```
 
-`safe-outputs.runs-on` overrides `runs-on-slim:` for safe-output jobs specifically. To override the runner for all framework jobs at once, use the top-level [`runs-on-slim:`](/gh-aw/guides/self-hosted-runners/#configuring-the-framework-job-runner) field instead.
+`safe-outputs.runs-on` overrides `runs-on-slim:` for safe-output jobs specifically. To override the runner for all framework jobs at once, use the top-level [`runs-on-slim:`](/gh-aw/reference/self-hosted-runners/#configuring-the-framework-job-runner) field instead.
 
 ### Safe Outputs Job Concurrency (`concurrency-group:`)
 

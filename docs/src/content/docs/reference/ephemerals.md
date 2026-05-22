@@ -138,7 +138,7 @@ The `runs_on` field accepts a single string or an array of strings for multi-lab
 
 The `action_failure_issue_expires` field controls expiration (in hours) for failure issues opened by the conclusion job (including grouped parent issues when `group-reports: true`). The default is `168` (7 days).
 
-See [Self-Hosted Runners](/gh-aw/guides/self-hosted-runners/#configuring-the-maintenance-workflow-runner) for more details.
+See [Self-Hosted Runners](/gh-aw/reference/self-hosted-runners/#configuring-the-maintenance-workflow-runner) for more details.
 
 **Disable maintenance entirely:**
 
